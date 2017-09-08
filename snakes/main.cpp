@@ -2,29 +2,38 @@
 #include <string>
 #include "square.h"
 #include "snake.h"
+#include <cstdlib>
+#include <iostream>
+#include <ctime>
 
-#define WIDTH 64
-#define HEIGHT 48
+#define WIDTH 38
+#define HEIGHT 24
+#define INITIAL_SNAKE_SIZE 5
+
 
 Square *Board[WIDTH * HEIGHT];
+int score = 0;
 
 SnakePart *SnakeHead, *SnakeTail;
 int snakeDirection = 0;
+sf::RenderWindow window(sf::VideoMode(WIDTH * 10, HEIGHT * 10), "Snake");
 
 void fillBoardWithEmptySquares();
 void drawBoard(sf::RenderWindow &window);
 Square * getSquare(int x, int y);
 void updateBoard();
 
-void createSnake(int x, int y);
+void createSnake(int x, int y, int size);
 void moveSnake();
+int extendSnake(int x, int y);
+void addFruit();
 
 int main()
 {
+  std::srand(std::time(0));
   fillBoardWithEmptySquares();
-  createSnake(WIDTH / 2, HEIGHT / 2);
-  sf::RenderWindow window(sf::VideoMode(WIDTH * 10, HEIGHT * 10), "Snake");
-  window.setFramerateLimit(25);
+  createSnake(WIDTH / 2, HEIGHT / 2 + INITIAL_SNAKE_SIZE, INITIAL_SNAKE_SIZE);
+  window.setFramerateLimit(20);
 
   while (window.isOpen()) {
 
@@ -36,25 +45,30 @@ int main()
         printf("CLOSE WINDOW\n");
         window.close();
       }
-      if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up)) 
+      if (sf::Keyboard::isKeyPressed(sf::Keyboard::Up) && snakeDirection != 2) 
       {
         snakeDirection = 0;
+        break;
       }
-      if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down)) 
+      if (sf::Keyboard::isKeyPressed(sf::Keyboard::Down) && snakeDirection != 0) 
       {
         snakeDirection = 2;
+        break;
       }
-      if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left)) 
+      if (sf::Keyboard::isKeyPressed(sf::Keyboard::Left) && snakeDirection != 1) 
       {
         snakeDirection = 3;
+        break;
       }
-      if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right)) 
+      if (sf::Keyboard::isKeyPressed(sf::Keyboard::Right) && snakeDirection != 3) 
       {
         snakeDirection = 1;
+        break;
       }        
     }
 
     moveSnake();
+    addFruit();
     window.clear(sf::Color::Black);
     updateBoard();
     drawBoard(window);
@@ -105,7 +119,9 @@ void updateBoard()
 {
   int i;
   for (i = 0; i < WIDTH * HEIGHT; i++) {
-    Board[i]->type = 0;
+    if (Board[i]->type != 1) {
+      Board[i]->type = 0;
+    }
   }
 
   SnakePart *currentSnakePart = SnakeHead;
@@ -120,35 +136,78 @@ Square * getSquare(int x, int y)
   return Board[y * WIDTH + x];
 }
 
-void createSnake(int x, int y)
+void createSnake(int x, int y, int size)
 {
-  SnakeTail = new SnakePart(x, y, NULL);
-  SnakePart *secondPart = new SnakePart(x, y + 1, SnakeTail);
-  SnakePart *thirdPart = new SnakePart(x, y + 2, secondPart);
-  SnakePart *fourthPart = new SnakePart(x, y + 3, thirdPart);
-  SnakeHead = new SnakePart(x, y + 4, fourthPart);
+  SnakeTail = new SnakePart(x, y, NULL); 
+  SnakePart *lastMadeSnakePart = SnakeTail;
+  int i;
+
+  for (i = 0; i < size; i++) {
+    SnakePart *newSnakePart = new SnakePart(x, y - i + 1, lastMadeSnakePart);
+    lastMadeSnakePart = newSnakePart;
+  }
+
+  SnakeHead = lastMadeSnakePart;
 }
 
 void moveSnake()
 {
-  SnakePart *currentSnakePart = SnakeHead;
-  while (currentSnakePart->next != NULL) {
-    switch (snakeDirection) {
-      case 0:
-        currentSnakePart->y--;
+  switch (snakeDirection) {
+    case 0:
+      extendSnake(0, -1);
+      break;
+    case 2:
+      extendSnake(0, 1);
+      break;
+    case 3:
+      extendSnake(-1, 0);
+      break;
+    case 1:
+      extendSnake(1, 0);
+      break;
+    default:
+      break;
+  }
+}
+
+int extendSnake(int x, int y)
+{
+  if (
+    SnakeHead->x + x > WIDTH - 1 || 
+    SnakeHead->x + x < 0 ||
+    SnakeHead->y + y > HEIGHT - 1||
+    SnakeHead->y + y < 0 ||
+    getSquare(SnakeHead->x + x, SnakeHead->y + y)->type == 2
+    ) 
+  {
+    window.close();
+    printf("GAME OVER\nSCORE: %d\n", score);
+    return 0;
+  }
+
+  if (getSquare(SnakeHead->x + x, SnakeHead->y + y)->type == 0) {
+    SnakePart *currentSnakePart = SnakeHead;
+    while (1) {
+      if (currentSnakePart->next->next == NULL) {
+        currentSnakePart->next = NULL;
+        SnakeTail = currentSnakePart;
         break;
-      case 2:
-        currentSnakePart->y++;
-        break;
-      case 3:
-        currentSnakePart->x--;
-        break;
-      case 1:
-        currentSnakePart->x++;
-        break;
-      default:
-        break;
+      }
+      currentSnakePart = currentSnakePart->next;
     }
-    currentSnakePart = currentSnakePart->next;
+  } else if (getSquare(SnakeHead->x + x, SnakeHead->y + y)->type == 1) {
+    score++;
+  }
+
+  SnakePart *newHead = new SnakePart(SnakeHead->x + x, SnakeHead->y + y, SnakeHead);
+  SnakeHead = newHead;
+}
+
+void addFruit()
+{
+  if (std::rand() % 30 == 1) {
+    int randomX = std::rand() % WIDTH;
+    int randomY = std::rand() % HEIGHT;
+    Board[randomY * WIDTH + randomX]->type = 1;
   }
 }
